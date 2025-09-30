@@ -1,5 +1,5 @@
-from django import forms
 from decimal import Decimal, ROUND_HALF_UP
+from django import forms
 from django.core.exceptions import ValidationError
 from customers.models import Customer, CustomerContact
 from products.models import ProductInterest
@@ -65,7 +65,15 @@ class SalesForm(forms.ModelForm):
             self.fields["contact_person"].empty_label = "Select contact"
 
 
+from django import forms
+from django.db.models import Sum
+from .models import Sales, SalesItem
+from django import forms
+from django.db.models import Sum
+from .models import Sales, PAYMENT_CHOICES, CONTRACT_CHOICES
+
 class UpdateSalesForm(forms.ModelForm):
+    # ----------------- General fields -----------------
     client_budget = forms.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -74,39 +82,111 @@ class UpdateSalesForm(forms.ModelForm):
         widget=forms.NumberInput(attrs={"class": "form-control"})
     )
 
+    # ----------------- Closing stage fields -----------------
+    contract_outcome = forms.ChoiceField(
+    choices=[('', '--- Select ---')] + list(CONTRACT_CHOICES),
+    required=False,
+    label="Contract Outcome",
+    widget=forms.Select(attrs={"class": "form-control"})
+)
+
+    is_payment_collected = forms.ChoiceField(
+    choices=[('', '--- Select ---')] + list(PAYMENT_CHOICES),  # blank first option
+    required=False,
+    label="Payment Collected",
+    widget=forms.Select(attrs={"class": "form-control"})
+)
+
+    closing_amount = forms.DecimalField(
+        max_digits=19,
+        decimal_places=2,
+        required=False,
+        label="Contract Amount",
+        widget=forms.NumberInput(attrs={"class": "form-control", "disabled": "disabled"})
+    )
+
+    reason_lost = forms.CharField(
+        required=False,
+        label="Reason for Lost",
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2})
+    )
+
     class Meta:
         model = Sales
-        fields = ["status", "is_order_final", "reason_lost"]
+        fields = [
+            "is_order_final",
+            "reason_lost",
+            "contract_outcome",
+            "is_payment_collected",
+        ]
 
     def __init__(self, *args, **kwargs):
         stage = kwargs.pop("stage", None)
         super().__init__(*args, **kwargs)
 
-        # Hide only other stage-specific fields
-        self.fields["is_order_final"].widget = forms.HiddenInput()
-        self.fields["reason_lost"].widget = forms.HiddenInput()
-
-        # Pre-fill client budget from Customer model
+        # Pre-fill client budget from company
         if self.instance.company:
             self.fields["client_budget"].initial = self.instance.company.client_budget
 
-        # Stage-specific logic
+        # Qualifying stage: client_budget is required
         if stage == "Qualifying":
             self.fields["client_budget"].required = True
-        elif stage == "Proposal or Negotiation":
-            self.fields["is_order_final"].widget = forms.CheckboxInput()
-        elif stage == "Closing":
-            self.fields["reason_lost"].widget = forms.Textarea()
+
+        # Closing stage: calculate total and show fields
+        if stage == "Closing":
+            total = self.instance.items.aggregate(total=Sum('price'))['total'] or 0
+            self.fields["closing_amount"].initial = total
+
+        # Ensure fields are always rendered; JS will handle visibility
+        for field_name in ["contract_outcome", "is_payment_collected", "closing_amount", "reason_lost"]:
+            self.fields[field_name].widget.attrs.update({
+                "class": self.fields[field_name].widget.attrs.get("class", "") + " form-control"
+            })
+
+    def clean(self):
+        cleaned_data = super().clean()
+        contract_outcome = cleaned_data.get("contract_outcome")
+        is_payment_collected = cleaned_data.get("is_payment_collected")
+        reason_lost = cleaned_data.get("reason_lost")
+
+        # Closing stage validation
+        if contract_outcome == "Lost" and not reason_lost:
+            self.add_error("reason_lost", "Reason for lost is required if contract is lost.")
+
+        if contract_outcome == "Won" and not is_payment_collected:
+            self.add_error("is_payment_collected", "Please select payment status if contract is won.")
+
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        # Update status automatically based on contract outcome + payment
+        instance.update_status()
+        if commit:
+            instance.save()
+        return instance
+
+
+# ------------------- SalesItemForm -------------------
 
 # ------------------- SalesItemForm -------------------
 class SalesItemForm(forms.ModelForm):
     class Meta:
         model = SalesItem
-        fields = ["product", "price"]
+        fields = ["price"]  # Only price, product is linked via product_interests
         widgets = {
-            "product": forms.Select(attrs={"class": "form-select", "readonly": "readonly", "disabled": True}),
-            "price": forms.NumberInput(attrs={"class": "form-control"}),
+            "price": forms.NumberInput(attrs={
+                "class": "form-control",
+                "placeholder": "Enter price"
+            }),
         }
+
+    def __init__(self, *args, **kwargs):
+        stage = kwargs.pop("stage", None)
+        super().__init__(*args, **kwargs)
+        # Price is required in Proposal stage
+        if stage == "Proposal or Negotiation":
+            self.fields["price"].required = True
 
     def clean_price(self):
         price = self.cleaned_data.get("price")
@@ -115,7 +195,10 @@ class SalesItemForm(forms.ModelForm):
         return price
 
 
-SalesItemFormSet = forms.modelformset_factory(
+# ------------------- SalesItemFormSet -------------------
+from django.forms import modelformset_factory
+
+SalesItemFormSet = modelformset_factory(
     SalesItem,
     form=SalesItemForm,
     extra=0,

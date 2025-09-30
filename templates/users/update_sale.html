@@ -22,6 +22,20 @@
         {% endfor %}
       {% endif %}
 
+      <!-- Global form errors -->
+      {% if update_form.errors %}
+        <div class="alert alert-danger">
+          <strong>There are errors in the Update form:</strong>
+          <ul class="mb-0">
+            {% for field, errors in update_form.errors.items %}
+              {% for error in errors %}
+                <li><strong>{{ field|capfirst }}:</strong> {{ error }}</li>
+              {% endfor %}
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
       <!-- Header -->
       <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0"><i class="fa-solid fa-users me-2 text-primary"></i>Update Sale</h1>
@@ -31,81 +45,151 @@
       </div>
 
       <!-- Stage Confirmation Modal -->
-      {% if not next_stage %}
-      <div class="modal" id="stageModal" tabindex="-1" style="display:block; background: rgba(0,0,0,0.5)">
-        <div class="modal-dialog">
-          <div class="modal-content p-4">
-            <h5>Customer Stage Confirmation</h5>
-            <p>This customer is currently in stage:
-               <strong>{{ sale.company.acquisition_stage }}</strong>.
-            </p>
-            <p>Do you want to proceed to the next stage?</p>
-            <button type="button" id="stageConfirm" class="btn btn-primary">Yes</button>
-            <a href="{% url 'sales_detail' sale.id %}" class="btn btn-secondary">No</a>
-          </div>
-        </div>
+{% if not next_stage %}
+<div class="modal show d-block" id="stageModal" tabindex="-1" style="background: rgba(0,0,0,0.6)">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content shadow-lg rounded-4 border-0">
+      <div class="modal-header border-0">
+        <h5 class="modal-title w-100 text-center fw-bold animate-title">
+          🚀 Customer Stage Confirmation
+        </h5>
       </div>
-      {% endif %}
+      <div class="modal-body text-center">
+        <p class="fs-6">
+          This customer is currently in stage:
+          <span class="badge bg-info text-dark px-3 py-2">
+            {{ sale.company.acquisition_stage }}
+          </span>
+        </p>
+        <p class="text-muted">Do you want to proceed to the next stage?</p>
+      </div>
+      <div class="modal-footer border-0 justify-content-center gap-3 flex-wrap">
+        <button type="button" id="stageConfirm" class="btn btn-primary px-4 py-2 rounded-pill shadow-sm">
+          ✅ Yes, Proceed
+        </button>
+        <a href="{% url 'sales_detail' sale.id %}" class="btn btn-outline-secondary px-4 py-2 rounded-pill shadow-sm">
+          ❌ No, Cancel
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
       <!-- FORM -->
       <form method="post" enctype="multipart/form-data" id="updateSaleForm">
         {% csrf_token %}
-
-        <!-- hidden input to hold next stage -->
         <input type="hidden" name="next_stage" id="nextStageInput" value="{{ next_stage|default:'' }}">
 
         <div id="formContent" {% if not next_stage %}style="display:none"{% endif %}>
-          <!-- Client Information -->
+
+          <!-- Client Info -->
           <div class="mb-3">
-            <label for="{{ sales_form.company.id_for_label }}">{{ sales_form.company.label }}</label>
+            <label>{{ sales_form.company.label }}</label>
             {{ sales_form.company }}
+            {% if sales_form.company.errors %}<div class="text-danger small">{{ sales_form.company.errors }}</div>{% endif %}
           </div>
+
           <div class="mb-3">
-            <label for="{{ sales_form.contact_person.id_for_label }}">{{ sales_form.contact_person.label }}</label>
+            <label>{{ sales_form.contact_person.label }}</label>
             {{ sales_form.contact_person }}
+            {% if sales_form.contact_person.errors %}<div class="text-danger small">{{ sales_form.contact_person.errors }}</div>{% endif %}
           </div>
+
           <div class="mb-3">
-            <label for="{{ sales_form.contact_number.id_for_label }}">{{ sales_form.contact_number.label }}</label>
+            <label>{{ sales_form.contact_number.label }}</label>
             {{ sales_form.contact_number }}
+            {% if sales_form.contact_number.errors %}<div class="text-danger small">{{ sales_form.contact_number.errors }}</div>{% endif %}
           </div>
+
           <div class="mb-3">
-            <label for="{{ sales_form.designation.id_for_label }}">{{ sales_form.designation.label }}</label>
+            <label>{{ sales_form.designation.label }}</label>
             {{ sales_form.designation }}
+            {% if sales_form.designation.errors %}<div class="text-danger small">{{ sales_form.designation.errors }}</div>{% endif %}
           </div>
+
           <div class="mb-3">
-            <label for="{{ sales_form.item_discussed.id_for_label }}">{{ sales_form.item_discussed.label }}</label>
+            <label>{{ sales_form.item_discussed.label }}</label>
             {{ sales_form.item_discussed }}
-          </div>
-          <div class="mb-3">
-            <label for="{{ sales_form.product_interests.id_for_label }}">{{ sales_form.product_interests.label }}</label>
-            {{ sales_form.product_interests }}
+            {% if sales_form.item_discussed.errors %}<div class="text-danger small">{{ sales_form.item_discussed.errors }}</div>{% endif %}
           </div>
 
-          <!-- Stage-Specific Fields -->
+          <!-- Stage-specific fields -->
           <div class="mb-3" id="clientBudgetWrapper" style="display:none">
-            <label for="{{ update_form.client_budget.id_for_label }}">{{ update_form.client_budget.label }}</label>
+            <label>{{ update_form.client_budget.label }}</label>
             {{ update_form.client_budget }}
-          </div>
-          <div class="mb-3" id="isOrderFinalWrapper" style="display:none">
-            <label for="{{ update_form.is_order_final.id_for_label }}">{{ update_form.is_order_final.label }}</label>
-            {{ update_form.is_order_final }}
-          </div>
-          <div class="mb-3" id="reasonLostWrapper" style="display:none">
-            <label for="{{ update_form.reason_lost.id_for_label }}">{{ update_form.reason_lost.label }}</label>
-            {{ update_form.reason_lost }}
+            {% if update_form.client_budget.errors %}<div class="text-danger small">{{ update_form.client_budget.errors }}</div>{% endif %}
           </div>
 
-          <!-- Product Pricing (for Proposal stage) -->
-          {% if formset %}
-            <h5 class="mt-4">Products & Pricing</h5>
-            {{ formset.management_form }}
-            {% for f in formset %}
-              <div class="row mb-3">
-                <div class="col-md-6">{{ f.product }}</div>
-                <div class="col-md-6">{{ f.price }}</div>
-              </div>
-            {% endfor %}
-          {% endif %}
+          <div class="mb-3" id="isOrderFinalWrapper" style="display:none">
+            <div class="form-check d-flex align-items-center gap-2">
+              {{ update_form.is_order_final }}
+              <label class="form-check-label mb-0" for="{{ update_form.is_order_final.id_for_label }}">
+                {{ update_form.is_order_final.label }}
+              </label>
+            </div>
+            {% if update_form.is_order_final.errors %}
+              <div class="text-danger small">{{ update_form.is_order_final.errors }}</div>
+            {% endif %}
+          </div>
+
+          <!-- Closing stage: Contract outcome & Payment -->
+<div class="mb-3" id="closingFieldsWrapper" style="display:none">
+  <div class="row g-2 align-items-center">
+    <!-- Contract Outcome -->
+    <div class="col-md-4">
+      <label>{{ update_form.contract_outcome.label }}</label>
+      {{ update_form.contract_outcome }}
+      {% if update_form.contract_outcome.errors %}
+        <div class="text-danger small">{{ update_form.contract_outcome.errors }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Payment Collected -->
+    <div class="col-md-4">
+      <label>{{ update_form.is_payment_collected.label }}</label>
+      {{ update_form.is_payment_collected }}
+      {% if update_form.is_payment_collected.errors %}
+        <div class="text-danger small">{{ update_form.is_payment_collected.errors }}</div>
+      {% endif %}
+    </div>
+
+    <!-- Total Amount -->
+    <div class="col-md-4">
+      <label>Contract Amount</label>
+      <input type="text" class="form-control" value="{{ total_amount }}" disabled>
+    </div>
+  </div>
+
+  <!-- Reason for Lost -->
+  <div class="mb-3" id="reasonLostWrapper" style="display:none">
+    <label>{{ update_form.reason_lost.label }}</label>
+    {{ update_form.reason_lost }}
+    {% if update_form.reason_lost.errors %}
+      <div class="text-danger small">{{ update_form.reason_lost.errors }}</div>
+    {% endif %}
+  </div>
+</div>
+
+          <!-- Proposal stage: Products & Pricing -->
+          <div class="mb-3" id="productPricingWrapper" style="display:none">
+            {% if product_forms %}
+              <h5 class="mt-4">Products & Pricing</h5>
+              {{ formset.management_form }}
+              {% for product, form in product_forms %}
+                {{ form.id }}
+                <div class="row mb-3 align-items-center">
+                  <div class="col-md-6">
+                    <input type="text" class="form-control" value="{{ product.product.name }}" readonly>
+                  </div>
+                  <div class="col-md-6">
+                    {{ form.price }}
+                    {% if form.price.errors %}<div class="text-danger small">{{ form.price.errors }}</div>{% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            {% endif %}
+          </div>
 
           <div class="mt-4">
             <button type="submit" class="btn btn-success"><i class="fa-solid fa-check me-1"></i>Update Sale</button>
@@ -117,7 +201,6 @@
   </div>
 </div>
 
-<!-- SCRIPT -->
 <script>
 document.addEventListener("DOMContentLoaded", function () {
   const stageModal = document.getElementById("stageModal");
@@ -125,7 +208,17 @@ document.addEventListener("DOMContentLoaded", function () {
   const nextStageInput = document.getElementById("nextStageInput");
   const formContent = document.getElementById("formContent");
 
-  // Stage order mapping
+  const clientBudget = document.getElementById("clientBudgetWrapper");
+  const isOrderFinal = document.getElementById("isOrderFinalWrapper");
+  const productPricing = document.getElementById("productPricingWrapper");
+  const closingWrapper = document.getElementById("closingFieldsWrapper");
+  const reasonLostWrapper = document.getElementById("reasonLostWrapper");
+
+  const contractOutcome = document.getElementById("id_contract_outcome");
+  const paymentCollectedSelect = document.getElementById("id_is_payment_collected");
+  const paymentCollectedWrapper = paymentCollectedSelect?.closest(".col-md-4");
+  const totalAmountWrapper = closingWrapper.querySelector('input[disabled]')?.closest(".col-md-4");
+
   const stageOrder = [
     "Prospecting",
     "Qualifying",
@@ -139,37 +232,171 @@ document.addEventListener("DOMContentLoaded", function () {
     return i >= 0 && i < stageOrder.length - 1 ? stageOrder[i + 1] : current;
   }
 
-  function showFields(stage) {
-    const clientBudget = document.getElementById("clientBudgetWrapper");
-    const isOrderFinal = document.getElementById("isOrderFinalWrapper");
-    const reasonLost = document.getElementById("reasonLostWrapper");
-
-    if(clientBudget) clientBudget.style.display = "none";
-    if(isOrderFinal) isOrderFinal.style.display = "none";
-    if(reasonLost) reasonLost.style.display = "none";
-
-    if(stage === "Qualifying" && clientBudget) clientBudget.style.display = "block";
-    if(stage === "Proposal or Negotiation" && isOrderFinal) isOrderFinal.style.display = "block";
-    if(stage === "Closing" && reasonLost) reasonLost.style.display = "block";
+  function hideAllFields() {
+    [clientBudget, isOrderFinal, productPricing, closingWrapper, reasonLostWrapper].forEach(el => {
+      if (el) el.style.display = "none";
+    });
+    if (paymentCollectedWrapper) paymentCollectedWrapper.style.display = "none";
+    if (totalAmountWrapper) totalAmountWrapper.style.display = "none";
   }
 
-  // Confirm modal → move to next stage
-  if(stageConfirm) {
-    stageConfirm.addEventListener("click", function() {
+  function handleContractOutcome(value) {
+    if (value === "Won") {
+      if (paymentCollectedWrapper) paymentCollectedWrapper.style.display = "block";
+      if (totalAmountWrapper) totalAmountWrapper.style.display = "block";
+      if (reasonLostWrapper) reasonLostWrapper.style.display = "none";
+    } else if (value === "Lost") {
+      if (reasonLostWrapper) reasonLostWrapper.style.display = "block";
+      if (paymentCollectedWrapper) paymentCollectedWrapper.style.display = "none";
+      if (totalAmountWrapper) totalAmountWrapper.style.display = "none";
+    } else {
+      if (paymentCollectedWrapper) paymentCollectedWrapper.style.display = "none";
+      if (totalAmountWrapper) totalAmountWrapper.style.display = "none";
+      if (reasonLostWrapper) reasonLostWrapper.style.display = "none";
+    }
+  }
+
+  function showFields(stage) {
+    hideAllFields();
+    if (stage === "Qualifying") clientBudget.style.display = "block";
+    if (stage === "Proposal or Negotiation") {
+      if (isOrderFinal) isOrderFinal.style.display = "block";
+      if (productPricing) productPricing.style.display = "block";
+    }
+    if (stage === "Closing") {
+      if (closingWrapper) closingWrapper.style.display = "block";
+      if (contractOutcome) contractOutcome.closest(".col-md-4").style.display = "block";
+      handleContractOutcome(contractOutcome.value);
+    }
+  }
+
+  if (contractOutcome) {
+    contractOutcome.value = "";  // Ensure default is unselected
+    handleContractOutcome(contractOutcome.value);
+    contractOutcome.addEventListener("change", function () {
+      handleContractOutcome(this.value);
+    });
+  }
+
+  if (stageConfirm) {
+    stageConfirm.addEventListener("click", function () {
       const currentStage = "{{ sale.company.acquisition_stage }}";
       const nextStage = getNextStage(currentStage);
+
+      // Prevent proceeding if Won + Yes-Full
+      if (contractOutcome.value === "Won" && paymentCollectedSelect?.value === "Yes-Full") {
+        alert("Cannot proceed to next stage: payment is fully collected.");
+        return;
+      }
+
       nextStageInput.value = nextStage;
-      if(stageModal) stageModal.style.display = "none";
-      formContent.style.display = "block";
+      if (stageModal) {
+        stageModal.classList.remove("show", "d-block");
+        stageModal.style.display = "none";
+      }
+      if (formContent) formContent.style.display = "block";
       showFields(nextStage);
     });
   }
 
-  // If stage already provided (refresh case)
   {% if next_stage %}
     showFields("{{ next_stage }}");
+    if (formContent) formContent.style.display = "block";
+    if (stageModal) stageModal.style.display = "none";
   {% endif %}
 });
 </script>
 
+
+
+
+
+
+<style>
+  /* Animation for the title */
+  .animate-title {
+    animation: fadeInUp 1s ease-in-out;
+    font-size: 1.25rem;
+    letter-spacing: 0.5px;
+  }
+
+  @keyframes fadeInUp {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 576px) {
+    .modal-content {
+      padding: 1rem !important;
+    }
+    .modal-title {
+      font-size: 1rem;
+    }
+    .modal-footer button,
+    .modal-footer a {
+      flex: 1 1 100%;
+    }
+  } /* ✅ CLOSE your media query here */
+
+  /* Headers */
+  h1, h5 { font-weight: 600; }
+
+  /* Labels */
+  label { font-weight: 500; margin-bottom: 0.5rem; display: block; }
+
+  /* Buttons */
+  .btn { 
+    border-radius: 8px; 
+    padding: 0.6rem 1.2rem; 
+    font-size: 0.95rem; 
+    transition: all 0.2s ease; 
+  }
+
+  .btn:hover { transform: scale(1.03); }
+
+  input:not([type=checkbox]), select, textarea {
+    width: 100% !important;
+    min-height: 50px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-size: 1rem;
+    background: transparent !important;
+    color: #000;
+    box-shadow: none !important;
+    transition: all 0.2s ease;
+}
+  input:focus, select:focus, textarea:focus {
+    border-color: #007bff !important;
+    outline: none !important;
+    box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+    background: transparent !important;
+  }
+
+  /* Multi-step form */
+  .step { transition: all 0.3s ease; }
+
+  /* Row and column adjustments for responsiveness */
+  @media (max-width: 992px) {
+    .row { flex-direction: column; }
+    .col-md-6 { width: 100%; padding: 0; }
+  }
+
+  @media (max-width: 576px) {
+    .btn { width: 100%; margin-bottom: 0.5rem; }
+  }
+
+  /* Step spacing */
+  .mb-3 { margin-bottom: 1.5rem; }
+
+  /* Optional: subtle hover effect on selects */
+  select:hover { border-color: #007bff; }
+</style>
 {% endblock %}

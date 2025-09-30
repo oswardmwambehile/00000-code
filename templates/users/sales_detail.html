@@ -53,37 +53,44 @@
                   {% else %}bg-light text-dark{% endif %}">
                   {{ sale.company.acquisition_stage }}
                 </span></p>
+                {% if sale.company.client_budget %}
+  <p>
+    <strong>Client Budget:</strong> ${{ sale.company.client_budget|floatformat:2 }}
+  </p>
+  {% endif %}
           <p><strong>Created At:</strong> {{ sale.created_at|date:"Y-m-d H:i" }}</p>
           <p><strong>Updated At:</strong> {{ sale.updated_at|date:"Y-m-d H:i" }}</p>
         </div>
       </div>
 
-      <!-- Products Interested -->
-      <div class="mb-4">
-        <h5><i class="fas fa-industry me-1 text-info"></i> Products Interested</h5>
-        {% if sale.product_interests.exists %}
-        <div class="table-responsive">
-          <table class="table table-bordered table-striped align-middle w-100">
-            <thead class="table-light">
-              <tr>
-                <th>Created At</th>
-                <th>Product</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for product in sale.product_interests.all %}
-              <tr>
-                <td>{{ product.created_at|date:"Y-m-d" }}</td>
-                <td>{{ product.product }}</td>  {# or product.product.name if FK #}
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <p class="text-muted">No products linked to this sale.</p>
-        {% endif %}
-      </div>
+     <!-- Products Interested -->
+<div class="mb-4">
+  <h5><i class="fas fa-industry me-1 text-info"></i> Products Interested</h5>
+  {% if sale.product_interests.exists %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-striped align-middle w-100">
+      <thead class="table-light">
+        <tr>
+          <th>Created At</th>
+          <th>Product</th>
+          <th>Price</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product, item in product_items %}
+        <tr>
+          <td>{{ item.created_at|date:"Y-m-d" }}</td>
+          <td>{{ product.product }}</td> {# Product name from ProductInterest #}
+          <td>${{ item.price|floatformat:2 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-muted">No products linked to this sale.</p>
+  {% endif %}
+</div>
 
       <!-- Item Discussed -->
       {% if sale.item_discussed %}

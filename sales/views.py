@@ -99,61 +99,114 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404
 from .models import Sales
 
-
-# -------------------------------
-# Sales Detail View
-# -------------------------------
 @login_required
 def sales_detail(request, sale_id):
     sale = get_object_or_404(Sales, id=sale_id)
 
+    # Get products and their corresponding sales items
+    products = list(sale.product_interests.all())
+    items = list(sale.items.all().order_by("created_at"))
+
+    # Pair products with items (assumes same order)
+    product_items = zip(products, items)
+
     context = {
         "sale": sale,
+        "product_items": product_items,
     }
     return render(request, "users/sales_detail.html", context)
 
 
 
-from django.shortcuts import render, get_object_or_404, redirect
+from decimal import Decimal, ROUND_HALF_UP
+from django.db.models import Sum
+from django.shortcuts import render, get_object_or_404
 from django.contrib import messages
-from .models import Sales, SalesItem
+from .models import Sales, SalesItem, STAGE_STATUS_MAP
 from .forms import SalesForm, UpdateSalesForm, SalesItemFormSet
 
 def update_sale(request, pk):
     sale = get_object_or_404(Sales, pk=pk)
-    customer = sale.company   # assuming Sales has ForeignKey to Customer (company)
-
+    customer = sale.company
     next_stage = request.POST.get("next_stage") or request.GET.get("next_stage")
+    stage_for_form = next_stage or customer.acquisition_stage
 
+    # Ensure SalesItem exists for each product interest
+    product_interests = list(sale.product_interests.all())
+    existing_items = list(sale.items.all().order_by("created_at"))
+    for idx, product in enumerate(product_interests):
+        if idx >= len(existing_items):
+            SalesItem.objects.create(sales=sale, price=Decimal("0.00"))
+
+    sale_items = sale.items.all().order_by("created_at")
+
+    # Formset
+    formset_kwargs = {
+        "queryset": sale_items,
+        "prefix": "items",
+        "form_kwargs": {"stage": stage_for_form},
+    }
+    if request.method == "POST":
+        formset_kwargs["data"] = request.POST
+
+    formset = SalesItemFormSet(**formset_kwargs)
+
+    # Forms
     if request.method == "POST":
         sales_form = SalesForm(request.POST, instance=sale)
-        update_form = UpdateSalesForm(request.POST, instance=sale, stage=next_stage)
-        formset = SalesItemFormSet(request.POST, queryset=sale.items.all())
+        update_form = UpdateSalesForm(request.POST, instance=sale, stage=stage_for_form)
 
         if sales_form.is_valid() and update_form.is_valid() and formset.is_valid():
+            # Save main sale data
             sale = sales_form.save(commit=False)
-            update_form = UpdateSalesForm(request.POST, instance=sale, stage=next_stage)
-            sale = update_form.save()
+            sale = update_form.save(commit=False)
 
-            items = formset.save(commit=False)
-            for item in items:
+            # Update client budget if provided
+            client_budget = update_form.cleaned_data.get("client_budget")
+            if client_budget is not None:
+                customer.client_budget = client_budget
+                customer.save()
+
+            # Update acquisition stage if changed
+            if next_stage and customer.acquisition_stage != next_stage:
+                customer.acquisition_stage = next_stage
+                customer.save()
+
+            # Save items
+            for item in formset.save(commit=False):
                 item.sales = sale
+                if item.price is not None:
+                    item.price = Decimal(item.price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
                 item.save()
+            for obj in formset.deleted_objects:
+                obj.delete()
+
+            # --- Update status dynamically based on contract outcome & payment ---
+            sale.update_status()
+
+            # --- Calculate total_amount for Closing stage ---
+            total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
 
             messages.success(request, "Sale updated successfully.")
-            return redirect("sales_detail", sale.id)
-
+        else:
+            total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
+            messages.error(request, "Form submission has errors.")
     else:
         sales_form = SalesForm(instance=sale)
-        update_form = UpdateSalesForm(instance=sale, stage=next_stage)
-        formset = SalesItemFormSet(queryset=sale.items.all())
+        update_form = UpdateSalesForm(instance=sale, stage=stage_for_form)
+        total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
+
+    # Pair products with formset forms for template
+    product_forms = list(zip(product_interests, formset.forms))
 
     return render(request, "users/update_sale.html", {
         "sale": sale,
-        "customer": customer,   # ✅ add this
-        "stage": customer.acquisition_stage,  # ✅ current stage from customer
+        "customer": customer,
+        "stage": stage_for_form,
         "sales_form": sales_form,
         "update_form": update_form,
         "formset": formset,
         "next_stage": next_stage,
+        "product_forms": product_forms,
+        "total_amount": total_amount,
     })
