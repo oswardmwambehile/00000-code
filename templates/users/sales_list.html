@@ -79,19 +79,23 @@
               <td>{{ sale.created_at|date:"Y-m-d H:i" }}</td>
               <td class="text-nowrap">
   <!-- View Details -->
+   <td>
   <a href="{% url 'sales_detail' sale.id %}" class="btn btn-sm btn-primary me-1 mb-1">
     <i class="fas fa-eye"></i> View Detail
   </a>
 
-  <td>
-  <!-- Extra Link 1 (bg-warning) -->
-  <a href="{%url 'update_sale' sale.id %}" class="btn btn-sm btn-warning me-1 mb-1">
-    <i class="fas fa-handshake"></i> Add Followup
-  </a>
+  
+  <!-- Only show these buttons if not Won Paid or Lost -->
+  {% if sale.status != "Won Paid" and sale.status != "Lost" %}
+    <a href="{% url 'update_sale' sale.id %}" class="btn btn-sm btn-warning me-1 mb-1">
+      <i class="fas fa-handshake"></i> Add Followup
+    </a>
 
-   <a href="{% url 'new_visit_for_sale' sale.id %}" class="btn btn-sm btn-dark  mb-1">
-    <i class="fas fa-paper-plane"></i> Submit Sales
-  </a>
+    <a href="{% url 'new_visit_for_sale' sale.id %}" class="btn btn-sm btn-dark mb-1">
+      <i class="fas fa-paper-plane"></i> Submit Sales
+    </a>
+  {% endif %}
+
   
 </td>
 

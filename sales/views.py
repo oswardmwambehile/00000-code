@@ -117,13 +117,13 @@ def sales_detail(request, sale_id):
     return render(request, "users/sales_detail.html", context)
 
 
-
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from django.db.models import Sum
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from .models import Sales, SalesItem, STAGE_STATUS_MAP
 from .forms import SalesForm, UpdateSalesForm, SalesItemFormSet
+from payment.models import Payment
 
 def update_sale(request, pk):
     sale = get_object_or_404(Sales, pk=pk)
@@ -181,20 +181,54 @@ def update_sale(request, pk):
             for obj in formset.deleted_objects:
                 obj.delete()
 
-            # --- Update status dynamically based on contract outcome & payment ---
-            sale.update_status()
+            # --- Payment Followup: Save collected amounts ---
+            if next_stage == "Payment Followup":
+                for idx, item in enumerate(sale.items.all(), start=1):
+                    collected_str = request.POST.get(f"collected_{idx}", "0")
+                    try:
+                        collected = Decimal(collected_str).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                        if collected > 0:
+                            Payment.objects.create(
+                                sales=sale,
+                                amount=collected
+                            )
+                    except (InvalidOperation, ValueError):
+                        continue  # skip invalid inputs
 
-            # --- Calculate total_amount for Closing stage ---
-            total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
+                # --- Recalculate total collected and remaining balance ---
+                total_collected = sale.payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
+                remaining_balance = total_amount - total_collected
 
-            messages.success(request, "Sale updated successfully.")
+                # --- Update status based on remaining balance ---
+                if remaining_balance <= 0:
+                    sale.status = "Won Paid"
+                else:
+                    sale.status = "Won Pending Payment"
+                sale.save()
+            else:
+                # --- Update status dynamically for other stages ---
+                sale.update_status()
+
+            return redirect("sales_detail", sale_id=sale.id)
         else:
-            total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
             messages.error(request, "Form submission has errors.")
+
     else:
         sales_form = SalesForm(instance=sale)
         update_form = UpdateSalesForm(instance=sale, stage=stage_for_form)
-        total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
+
+    # --- Compute total_amount, total_collected, remaining_balance ---
+    total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
+    total_collected = sale.payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    remaining_balance = total_amount - total_collected
+
+    # --- Build per-item collected mapping ---
+    total_price = total_amount
+    item_collected_map = {}
+    for item in sale.items.all():
+        proportion = item.price / total_price if total_price else 0
+        item_collected_map[item.id] = (total_collected * proportion).quantize(Decimal("0.01"))
 
     # Pair products with formset forms for template
     product_forms = list(zip(product_interests, formset.forms))
@@ -209,4 +243,7 @@ def update_sale(request, pk):
         "next_stage": next_stage,
         "product_forms": product_forms,
         "total_amount": total_amount,
+        "total_collected": total_collected,
+        "remaining_balance": remaining_balance,
+        "item_collected_map": item_collected_map,
     })
