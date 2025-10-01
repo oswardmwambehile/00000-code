@@ -70,6 +70,7 @@
                 <span class="badge 
                   {% if sale.status == 'Open' %}bg-info
                   {% elif sale.status == 'Won Paid' %}bg-success
+                  {% elif sale.status == 'Won Pending Payment' %}bg-warning text-dark
                   {% elif sale.status == 'Lost' %}bg-danger
                   {% else %}bg-light text-dark{% endif %}">
                   {{ sale.status }}
@@ -77,7 +78,7 @@
               </td>
              
               <td>{{ sale.created_at|date:"Y-m-d H:i" }}</td>
-              <td class="text-nowrap">
+              <td class="text-nowrap"></td>
   <!-- View Details -->
    <td>
   <a href="{% url 'sales_detail' sale.id %}" class="btn btn-sm btn-primary me-1 mb-1">
@@ -151,3 +152,6 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 
 {% endblock %}
+
+
+

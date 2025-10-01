@@ -210,13 +210,13 @@
         </div>
 
         <!-- Collected Amount -->
-        <div class="col-md-3">
-          <input type="number" step="0.01" name="collected_{{ idx }}"
-            class="form-control payment-input"
-            value="{% if item_collected_map|dict_get:form.instance.id %}{{ item_collected_map|dict_get:form.instance.id }}{% else %}0{% endif %}"
-            data-max="{{ form.price.value|default:0 }}"
-            placeholder="Enter collected amount">
-        </div>
+        <input type="number" step="0.01" name="collected_{{ idx }}"
+  class="form-control payment-input"
+  value=""
+  data-max="{{ form.price.value|default:0 }}"
+  data-previous="{% if item_collected_map|dict_get:form.instance.id %}{{ item_collected_map|dict_get:form.instance.id }}{% else %}0{% endif %}"
+  placeholder="Enter collected amount">
+
 
         <!-- Remaining Balance -->
         <div class="col-md-3">
@@ -243,11 +243,13 @@
   </div>
 </div>
 
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-  // Elements
+  // --- Elements ---
   const stageModal = document.getElementById("stageModal");
   const stageConfirm = document.getElementById("stageConfirm");
+  const stageCancel = document.querySelector("#stageModal .btn-outline-secondary");
   const nextStageInput = document.getElementById("nextStageInput");
   const formContent = document.getElementById("formContent");
 
@@ -263,36 +265,44 @@ document.addEventListener("DOMContentLoaded", function () {
   const paymentCollectedWrapper = paymentCollectedSelect?.closest(".col-md-4");
 
   const stageOrder = ["Prospecting","Qualifying","Proposal or Negotiation","Closing","Payment Followup"];
-  const totalAmount = parseFloat("{{ total_amount|default:0 }}") || 0;
 
-  // Helpers
+  // --- Helper Functions ---
   function getPaymentInputs() {
     return document.querySelectorAll(".payment-input");
   }
+
   function getRemainingInputs() {
     return document.querySelectorAll(".remaining-balance");
   }
 
+  // --- Calculate remaining for each product independently ---
   function calculateRemaining() {
-    let totalPaid = 0;
     const paymentInputs = getPaymentInputs();
-    const remainingInputs = getRemainingInputs();
 
-    paymentInputs.forEach((input, index) => {
-      let val = parseFloat(input.value) || 0;
-      const max = parseFloat(input.dataset.max) || Infinity;
+    paymentInputs.forEach((input) => {
+      const row = input.closest('.row');
+      const remainingEl = row.querySelector('.remaining-balance');
+      if (!remainingEl) return;
 
-      // Clamp for calculation
-      const clamped = Math.min(Math.max(val, 0), max);
+      const max = parseFloat(input.dataset.max) || 0;
+      const previous = parseFloat(input.dataset.previous) || 0;
+      let currentVal = parseFloat(input.value) || 0;
 
-      // Update remaining per product
-      const remainingEl = remainingInputs[index];
-      if (remainingEl) remainingEl.value = (max - clamped).toFixed(2);
+      // Clamp current value
+      currentVal = Math.max(0, Math.min(currentVal, max - previous));
+      remainingEl.value = (max - previous - currentVal).toFixed(2);
 
-      totalPaid += clamped;
+      // Make input readonly if fully collected
+      if (previous >= max) {
+        input.readOnly = true;
+        input.value = "";
+        remainingEl.value = "0.00";
+      } else {
+        input.readOnly = false;
+      }
     });
 
-    // Update total remaining
+    // Update total remaining across all products
     const totalRemainingEl = document.getElementById("remainingBalance");
     if (totalRemainingEl) {
       const totalRemaining = [...getRemainingInputs()].reduce((sum, el) => sum + parseFloat(el.value || 0), 0);
@@ -312,8 +322,16 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function handleContractOutcome(value) {
-    if (value === "Won" && paymentCollectedWrapper) paymentCollectedWrapper.style.display="block";
-    if (value === "Lost" && reasonLostWrapper) reasonLostWrapper.style.display="block";
+    if (value === "Won") {
+      if (paymentCollectedWrapper) paymentCollectedWrapper.style.display = "block";
+      if (reasonLostWrapper) reasonLostWrapper.style.display = "none";
+    } else if (value === "Lost") {
+      if (paymentCollectedWrapper) paymentCollectedWrapper.style.display = "none";
+      if (reasonLostWrapper) reasonLostWrapper.style.display = "block";
+    } else {
+      if (paymentCollectedWrapper) paymentCollectedWrapper.style.display = "none";
+      if (reasonLostWrapper) reasonLostWrapper.style.display = "none";
+    }
   }
 
   function showFields(stage) {
@@ -331,9 +349,19 @@ document.addEventListener("DOMContentLoaded", function () {
     if (stage === "Payment Followup") {
       paymentFollowupWrapper.style.display = "block";
 
-      // Enable inputs and attach event
       getPaymentInputs().forEach(input => {
-        input.readOnly = false;
+        const max = parseFloat(input.dataset.max) || 0;
+        const previous = parseFloat(input.dataset.previous) || 0;
+
+        if (previous >= max) {
+          input.readOnly = true;
+          input.value = "";
+        } else {
+          input.readOnly = false;
+          input.value = "";
+        }
+
+        // Listen for input changes
         input.addEventListener("input", calculateRemaining);
       });
 
@@ -341,13 +369,19 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Modal events
+  // --- Event Listeners ---
+  if (contractOutcome) {
+    contractOutcome.addEventListener("change", function() {
+      handleContractOutcome(this.value);
+    });
+    handleContractOutcome(contractOutcome.value);
+  }
+
   if (stageConfirm) {
     stageConfirm.addEventListener("click", function() {
       const currentStage = "{{ sale.company.acquisition_stage }}";
       const nextStage = getNextStage(currentStage);
 
-      // Closing stage validation
       if (currentStage === "Closing") {
         if (contractOutcome.value === "Won" && paymentCollectedSelect?.value === "Yes-Full") {
           alert("Cannot proceed: Payment is fully collected (Won Paid).");
@@ -369,7 +403,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  const stageCancel = document.querySelector("#stageModal .btn-outline-secondary");
   if(stageCancel){
     stageCancel.addEventListener("click", function(e){
       e.preventDefault();
@@ -382,27 +415,21 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  // If next_stage already set
   {% if next_stage %}
     showFields("{{ next_stage }}");
     formContent.style.display = "block";
-    stageModal.style.display = "none";
+    if(stageModal) stageModal.style.display = "none";
   {% endif %}
 
-  // Enable payment inputs on load
+  // Setup initial remaining calculation
   getPaymentInputs().forEach(input => {
-    input.readOnly = false;
     input.addEventListener("input", calculateRemaining);
   });
 
-  // Initial calculation
   calculateRemaining();
 });
 </script>
-
-
-
-
-
 
 
 

@@ -116,7 +116,6 @@ def sales_detail(request, sale_id):
     }
     return render(request, "users/sales_detail.html", context)
 
-
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from django.db.models import Sum
 from django.shortcuts import render, get_object_or_404, redirect
@@ -124,6 +123,7 @@ from django.contrib import messages
 from .models import Sales, SalesItem, STAGE_STATUS_MAP
 from .forms import SalesForm, UpdateSalesForm, SalesItemFormSet
 from payment.models import Payment
+
 
 def update_sale(request, pk):
     sale = get_object_or_404(Sales, pk=pk)
@@ -176,17 +176,21 @@ def update_sale(request, pk):
             for item in formset.save(commit=False):
                 item.sales = sale
                 if item.price is not None:
-                    item.price = Decimal(item.price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                    item.price = Decimal(item.price).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                    )
                 item.save()
             for obj in formset.deleted_objects:
                 obj.delete()
 
-            # --- Payment Followup: Save collected amounts ---
+            # --- Payment Followup logic ---
             if next_stage == "Payment Followup":
                 for idx, item in enumerate(sale.items.all(), start=1):
                     collected_str = request.POST.get(f"collected_{idx}", "0")
                     try:
-                        collected = Decimal(collected_str).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                        collected = Decimal(collected_str).quantize(
+                            Decimal("0.01"), rounding=ROUND_HALF_UP
+                        )
                         if collected > 0:
                             Payment.objects.create(
                                 sales=sale,
@@ -195,13 +199,12 @@ def update_sale(request, pk):
                     except (InvalidOperation, ValueError):
                         continue  # skip invalid inputs
 
-                # --- Recalculate total collected and remaining balance ---
-                total_collected = sale.payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-                total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
-                remaining_balance = total_amount - total_collected
+                # --- Recalculate totals ---
+                total_amount = sale.items.aggregate(total=Sum("price"))["total"] or Decimal("0.00")
+                total_collected = sale.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
 
-                # --- Update status based on remaining balance ---
-                if remaining_balance <= 0:
+                # --- Update status based on totals ---
+                if total_collected >= total_amount:
                     sale.status = "Won Paid"
                 else:
                     sale.status = "Won Pending Payment"
@@ -210,6 +213,7 @@ def update_sale(request, pk):
                 # --- Update status dynamically for other stages ---
                 sale.update_status()
 
+            messages.success(request, "Sale updated successfully.")
             return redirect("sales_detail", sale_id=sale.id)
         else:
             messages.error(request, "Form submission has errors.")
@@ -218,12 +222,12 @@ def update_sale(request, pk):
         sales_form = SalesForm(instance=sale)
         update_form = UpdateSalesForm(instance=sale, stage=stage_for_form)
 
-    # --- Compute total_amount, total_collected, remaining_balance ---
-    total_amount = sale.items.aggregate(total=Sum('price'))['total'] or Decimal('0.00')
-    total_collected = sale.payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    # --- Compute totals for template ---
+    total_amount = sale.items.aggregate(total=Sum("price"))["total"] or Decimal("0.00")
+    total_collected = sale.payments.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
     remaining_balance = total_amount - total_collected
 
-    # --- Build per-item collected mapping ---
+    # --- Build per-item collected mapping (approximate split) ---
     total_price = total_amount
     item_collected_map = {}
     for item in sale.items.all():
