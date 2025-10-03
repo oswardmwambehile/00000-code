@@ -36,23 +36,7 @@
               <p><strong><i class="fas fa-envelope"></i> Email:</strong> {{ customer.email }}</p>
               <p><strong><i class="fas fa-map-marker-alt"></i> Location:</strong> {{ customer.location }}</p>
 
-              <!-- Latest Visit Tag -->
-              {% with latest_visit=visits.0 %}
-                <p><strong><i class="fas fa-tags"></i> Latest Tag:</strong>
-                  {% if latest_visit and latest_visit.tag %}
-                    <span class="badge 
-                      {% if latest_visit.tag == 'Prospect' %}bg-warning text-dark
-                      {% elif latest_visit.tag == 'Lead' %}bg-primary
-                      {% elif latest_visit.tag == 'Customer' %}bg-success
-                      {% else %}bg-light text-dark{% endif %}">
-                      {{ latest_visit.tag }}
-                    </span>
-                  {% else %}
-                    <span class="text-muted">N/A</span>
-                  {% endif %}
-                </p>
-              {% endwith %}
-
+              
             </div>
           </div>
         </div>

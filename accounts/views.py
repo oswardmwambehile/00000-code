@@ -16,6 +16,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import Branch
 from .forms import BranchForm
+from django.contrib.auth import authenticate, update_session_auth_hash
 from .models import Branch
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
@@ -25,10 +26,18 @@ from django.db.models import Q  # 🔍 For OR lookups
 
 
 def add_visit(request):
-    return render(request, 'users/add_vist.html')
+     if request.user.is_authenticated:
+        return render(request, 'users/add_vist.html')
+     else:
+        messages.error(request,'You must login first to access the page')
+        return redirect('login')
 
 def dashboard(request):
-    return render(request, 'company/dashboard.html')
+    if request.user.is_authenticated:
+       return render(request, 'company/dashboard.html')
+    else:
+        messages.error(request,'You must login first to access the page')
+        return redirect('login')
 
 
 User = get_user_model()
@@ -334,3 +343,79 @@ def user_detail(request, user_id):
     else:
         messages.error(request,'You must login first to access the page')
         return redirect('login')
+
+
+
+
+
+def change_password(request):
+    if request.user.is_authenticated:
+            if request.method == 'POST':
+                current_password = request.POST.get('current_password')
+                new_password1 = request.POST.get('new_password1')
+                new_password2 = request.POST.get('new_password2')
+
+                if not request.user.check_password(current_password):
+                    messages.error(request, 'Current password is incorrect.')
+                elif new_password1 != new_password2:
+                    messages.error(request, 'New passwords do not match.')
+                elif len(new_password1) < 8:
+                    messages.error(request, 'New password must be at least 8 characters.')
+                else:
+                    request.user.set_password(new_password1)
+                    request.user.save()
+                    update_session_auth_hash(request, request.user)  # keep user logged in
+                    messages.success(request, 'Password changed successfully.')
+                    return redirect('change_password')
+
+            return render(request, 'users/change_password.html')
+    else:
+        messages.error(request,'You must login first to access the page')
+        return redirect('login')
+
+
+
+
+
+def adminchange_password(request):
+     if request.user.is_authenticated:
+            if request.method == 'POST':
+                current_password = request.POST.get('current_password')
+                new_password1 = request.POST.get('new_password1')
+                new_password2 = request.POST.get('new_password2')
+
+                if not request.user.check_password(current_password):
+                    messages.error(request, 'Current password is incorrect.')
+                elif new_password1 != new_password2:
+                    messages.error(request, 'New passwords do not match.')
+                elif len(new_password1) < 8:
+                    messages.error(request, 'New password must be at least 8 characters.')
+                else:
+                    request.user.set_password(new_password1)
+                    request.user.save()
+                    update_session_auth_hash(request, request.user)  # keep user logged in
+                    messages.success(request, 'Password changed successfully.')
+                    return redirect('change_password')
+
+            return render(request, 'company/change_password.html')
+     else:
+        messages.error(request,'You must login first to access the page')
+        return redirect('login')
+     
+
+def profile_view(request):
+    if request.user.is_authenticated:
+        user = request.user  # The logged-in user
+        return render(request, 'users/profile.html', {'user': user})
+    else:
+        messages.error(request,'You must login first to access the page')
+        return redirect('login')
+
+def adminprofile_view(request):
+    if request.user.is_authenticated:
+        user = request.user  # The logged-in user
+        return render(request, 'company/profile.html', {'user': user})
+    else:
+        messages.error(request,'You must login first to access the page')
+        return redirect('login')
+
