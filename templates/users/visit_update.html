@@ -1,0 +1,218 @@
+{% extends "users/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block content %}
+{% include "users/sidebar.html" %}
+
+<div class="main-panel">
+  <div class="main-header">
+    <div class="main-header-logo">
+      <div class="logo-header" data-background-color="dark">
+        <a href="index.html" class="logo">
+          <img src="{% static 'assets/img/kaiadmin/logo_light.svg' %}" alt="navbar brand" class="navbar-brand" height="20" />
+        </a>
+        <div class="nav-toggle">
+          <button class="btn btn-toggle toggle-sidebar"><i class="gg-menu-right"></i></button>
+          <button class="btn btn-toggle sidenav-toggler"><i class="gg-menu-left"></i></button>
+        </div>
+        <button class="topbar-toggler more"><i class="gg-more-vertical-alt"></i></button>
+      </div>
+    </div>
+    {% include "users/nav.html" %}
+  </div>
+
+  <div class="container">
+    <div class="page-inner">
+      <form method="post" enctype="multipart/form-data" id="visitForm">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <!-- Client Info -->
+        <div id="clientInfo">
+          {% for field in form %}
+            {% if field.name != "client_budget" and field.name != "product_interests" and field.name != "latitude" and field.name != "longitude" %}
+              <div class="mb-3 field-wrapper" id="field_{{ field.name }}">
+                <label class="form-label">{{ field.label }}</label>
+                {{ field }}
+                {{ field.errors }}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <!-- Map -->
+        <div class="mb-3">
+          <h5>Location</h5>
+          <div id="map" class="map-container"></div>
+        </div>
+
+        <!-- Hidden latitude/longitude fields -->
+        {{ form.latitude }}
+        {{ form.longitude }}
+        <input type="hidden" name="action" id="id_action" value="">
+
+        <!-- Sales Info (Hidden Initially) -->
+        <div id="salesFields" style="display: none;">
+          <h5 class="mt-4">Sales Information</h5>
+          <div class="mb-3 field-wrapper">
+            {{ form.client_budget.label_tag }}
+            {{ form.client_budget }}
+          </div>
+          <div class="mb-3 field-wrapper">
+            {{ form.product_interests.label_tag }}
+            {{ form.product_interests }}
+          </div>
+          <button type="submit" name="action" value="save_sales" class="btn btn-success">
+            Save Sales Info
+          </button>
+        </div>
+
+        <!-- Decision Buttons -->
+        <div class="mt-3 button-group">
+          <button type="button" id="btnQualifying" class="btn btn-warning">Move to Qualifying</button>
+          <button type="button" id="btnProspecting" class="btn btn-primary">Continue with Prospecting/Qualifying</button>
+          <a href="{% url 'make_sales_order' visit.id %}" class="btn btn-success" role="button">
+            Sales / Make Order
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Leaflet Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const salesFields = document.getElementById("salesFields");
+    const btnQualifying = document.getElementById("btnQualifying");
+    const btnProspecting = document.getElementById("btnProspecting");
+    const btnSalesOrder = document.getElementById("btnSalesOrder");
+    const actionField = document.getElementById("id_action");
+
+    // Show Sales Fields dynamically only for the first two buttons
+    function showSalesFields(action) {
+        salesFields.style.display = "block";
+        actionField.value = action;
+        salesFields.scrollIntoView({behavior: "smooth", block: "start"});
+        const firstInput = salesFields.querySelector("input, select, textarea");
+        if (firstInput) firstInput.focus();
+    }
+
+    btnQualifying.addEventListener("click", () => showSalesFields("move_to_qualifying"));
+    btnProspecting.addEventListener("click", () => showSalesFields("continue_prospecting"));
+    if (btnSalesOrder) {
+        btnSalesOrder.addEventListener("click", () => {
+            actionField.value = "save_sales"; // optional
+        });
+    }
+
+    // Initialize Leaflet Map
+    let map;
+    function initMap() {
+        map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data © OpenStreetMap contributors'
+        }).addTo(map);
+
+        const latInput = document.getElementById("id_latitude");
+        const lonInput = document.getElementById("id_longitude");
+
+        // Always capture location automatically on update
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lon = position.coords.longitude.toFixed(6);
+
+                    map.setView([lat, lon], 15);
+
+                    // Static marker (non-draggable)
+                    L.marker([lat, lon], { draggable: false }).addTo(map)
+                        .bindPopup("Your location detected").openPopup();
+
+                    // Fill hidden inputs
+                    latInput.value = lat;
+                    lonInput.value = lon;
+                },
+                function(error) {
+                    alert("Could not detect location. Please allow location access.");
+                },
+                { enableHighAccuracy: true }
+            );
+        } else {
+            alert("Geolocation is not supported by your browser.");
+        }
+
+        // ✅ Fix: Ensure Leaflet redraws properly after load
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 1000);
+    }
+
+    initMap();
+});
+</script>
+
+
+<style>
+body { font-family: 'Segoe UI', sans-serif; color: #222; }
+h5 { font-weight: 600; margin-bottom: 0.8rem; }
+.map-container { height: 250px; width: 100%; border: 2px solid #ccc; border-radius: 8px; margin-bottom: 1rem; }
+
+.field-wrapper input,
+.field-wrapper select,
+.field-wrapper textarea {
+    width: 100%;
+    padding: 0.8rem 1rem;
+    border: 1.5px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    background: transparent;
+    color: #222;
+}
+.field-wrapper input:focus,
+.field-wrapper select:focus,
+.field-wrapper textarea:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 6px rgba(0,123,255,0.25);
+}
+
+input[type="file"] {
+    padding: 0.5rem;
+    border: 1px dashed #aaa;
+    background: transparent;
+}
+input[type="file"]:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 6px rgba(0,123,255,0.25);
+}
+
+input[type="checkbox"], input[type="radio"] {
+    margin-right: 8px;
+    transform: scale(1.2);
+}
+
+.btn {
+    border-radius: 8px;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+.btn:hover { transform: scale(1.03); }
+.button-group { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 1rem; }
+
+@media (max-width: 576px) {
+    .button-group { flex-direction: column; }
+    .btn { width: 100%; }
+}
+</style>
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+{% endblock %}
