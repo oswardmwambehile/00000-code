@@ -1,61 +1,93 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
 from .models import Product
-from .forms import ProductForm
+from .serializers import ProductSerializer
 
+# ----------------------
+# List all products
+# ----------------------
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def product_list(request):
-    if request.user.is_authenticated:
-        products = Product.objects.all().order_by("-created_at")
+    """
+    GET: List all products.
+    Only accessible to authenticated users.
+    """
+    products = Product.objects.all().order_by('-created_at')
+    serializer = ProductSerializer(products, many=True)
+    return Response(serializer.data)
 
-        # Handle Add
-        if request.method == "POST" and "add_product" in request.POST:
-            form = ProductForm(request.POST)
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Product added successfully.")
-                return redirect("product-list")
-        else:
-            form = ProductForm()
+# ----------------------
+# Create a product
+# ----------------------
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def product_create(request):
+    """
+    POST: Create a new product.
+    Only accessible to authenticated users.
+    """
+    serializer = ProductSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Handle Update
-        if request.method == "POST" and "update_product" in request.POST:
-            product_id = request.POST.get("product_id")
-            product = get_object_or_404(Product, pk=product_id)
-            form_update = ProductForm(request.POST, instance=product)
-            if form_update.is_valid():
-                form_update.save()
-                messages.success(request, "Product updated successfully.")
-                return redirect("product-list")
-        else:
-            form_update = ProductForm()
-
-        return render(
-            request,
-            "company/product_list.html",
-            {"products": products, "form": form, "form_update": form_update}
-        )
-    else:
-        messages.error(request, "You must login first to access the page")
-        return redirect("login")
-
-
+# ----------------------
+# Retrieve a single product
+# ----------------------
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def product_detail(request, pk):
-    if request.user.is_authenticated:
-        product = get_object_or_404(Product, pk=pk)
-        return render(request, "company/product_detail.html", {"product": product})
-    else:
-        messages.error(request, "You must login first to access the page")
-        return redirect("login")
+    """
+    GET: Retrieve a single product.
+    Only accessible to authenticated users.
+    """
+    try:
+        product = Product.objects.get(pk=pk)
+    except Product.DoesNotExist:
+        return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
 
+    serializer = ProductSerializer(product)
+    return Response(serializer.data)
 
+# ----------------------
+# Update a product
+# ----------------------
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def product_update(request, pk):
+    """
+    PUT/PATCH: Update a product.
+    Only accessible to authenticated users.
+    """
+    try:
+        product = Product.objects.get(pk=pk)
+    except Product.DoesNotExist:
+        return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = ProductSerializer(product, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# ----------------------
+# Delete a product
+# ----------------------
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
 def product_delete(request, pk):
-    if request.user.is_authenticated:
-        product = get_object_or_404(Product, pk=pk)
-        if request.method == "POST":
-            product.delete()
-            messages.success(request, "Product deleted successfully.")
-            return redirect("product-list")
-        return render(request, "company/product_confirm_delete.html", {"product": product})
-    else:
-        messages.error(request, "You must login first to access the page")
-        return redirect("login")
+    """
+    DELETE: Delete a product.
+    Only accessible to authenticated users.
+    """
+    try:
+        product = Product.objects.get(pk=pk)
+    except Product.DoesNotExist:
+        return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    product.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
