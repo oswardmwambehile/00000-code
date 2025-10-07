@@ -13,7 +13,7 @@ MEETING_TYPE_CHOICES = [
     ("Phone Call", "Phone Call"),
 ]
 
-STATUS_CHOICES = [
+VISIT_STATUSES = [
     ("Open", "Open"),
     ("Approved", "Approved"),
     ("Cancelled", "Cancelled"),
@@ -34,8 +34,7 @@ class Visit(models.Model):
         blank=True, 
         related_name="visit_contacts"   # ✅ changed from "sales" to "visit_contacts"
     )
-    contact_number = models.CharField(max_length=255, null=True,  blank=True)
-    designation = models.CharField(max_length=255, null=True,  blank=True)
+   
 
     item_discussed = models.TextField(null=True,  blank=True)
 
@@ -85,7 +84,7 @@ class Visit(models.Model):
 
     status = models.CharField(
         max_length=50, 
-        choices=STATUS_CHOICES, 
+        choices=VISIT_STATUSES, 
         default="Open",
         help_text="Status of the visit."
     )
@@ -99,6 +98,6 @@ class Visit(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        if self.sales and self.sales.company:
-            return f"Visit to {self.sales.company.company_name} on {self.created_at.strftime('%Y-%m-%d')}"
+        if self.sales and self.sales.customer:
+            return f"Visit to {self.sales.customer.company_name} on {self.created_at.strftime('%Y-%m-%d')}"
         return f"Visit #{self.id} on {self.created_at.strftime('%Y-%m-%d')}"
