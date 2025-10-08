@@ -1,7 +1,11 @@
 from django.urls import path
-from . import views
+from .views import VisitCreateView, VisitListView,VisitDetailView, VisitUpdateView
 
 urlpatterns = [
+    path('visit-create/', VisitCreateView.as_view(), name='create-visit'),
+    path('visit-list/', VisitListView.as_view(), name='list-visits'),
+    path('visit-details/<int:id>/', VisitDetailView.as_view(), name='detail-visit'),
+    path('visit-update/<int:id>/update/', VisitUpdateView.as_view(), name='update-visit'),
     
-    
+ 
 ]
