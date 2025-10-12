@@ -161,3 +161,38 @@ class BranchSerializer(serializers.ModelSerializer):
         
         return value
 
+
+from rest_framework import serializers
+from .models import User
+
+class UserListSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'first_name', 'last_name',
+            'company_name', 'position', 'zone', 'branch_name',
+            'contact', 'is_active', 'date_joined'
+        ]
+
+
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = '__all__'
+
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 'last_name', 'company_name',
+            'position', 'zone', 'branch', 'contact', 'is_active'
+        ]
+
+

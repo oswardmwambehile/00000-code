@@ -198,3 +198,39 @@ def branch_delete(request, pk):
     branch.delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
+from .models import User
+from .serializers import (
+    UserListSerializer,
+    UserDetailSerializer,
+    UserUpdateSerializer,
+    
+)
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all().order_by('first_name')
+    serializer_class = UserListSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class UserDetailView(generics.RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserDetailSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class UserUpdateView(generics.UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class UserDeleteView(generics.DestroyAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+

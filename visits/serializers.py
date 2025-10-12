@@ -1,9 +1,12 @@
 from rest_framework import serializers
 from .models import Visit
 from customers.models import CustomerContact
-from .utils import get_location_name  # your existing reverse geocode function
-from sales.models import Sales
+from .utils import get_location_name
+from sales.models import Sales, SalesItem
+from django.core.cache import cache
+from products.models import ProductInterest, Product  # included Product for update serializer
 
+# --------------------- VisitSerializer ---------------------
 class VisitSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.company_name', read_only=True)
     designation = serializers.CharField(source='company.designation', read_only=True)
@@ -12,13 +15,10 @@ class VisitSerializer(serializers.ModelSerializer):
     acquisition_stage = serializers.CharField(source='company.acquisition_stage', read_only=True)
     client_budget = serializers.DecimalField(source='company.client_budget', max_digits=15, decimal_places=2, read_only=True)
     products_interested = serializers.SerializerMethodField()
+    sales_items = serializers.SerializerMethodField()
 
-    latitude = serializers.DecimalField(
-        max_digits=9, decimal_places=6, required=False, allow_null=True
-    )
-    longitude = serializers.DecimalField(
-        max_digits=9, decimal_places=6, required=False, allow_null=True
-    )
+    latitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
+    longitude = serializers.DecimalField(max_digits=9, decimal_places=6, required=False, allow_null=True)
 
     place_name = serializers.SerializerMethodField()
     region = serializers.SerializerMethodField()
@@ -28,72 +28,78 @@ class VisitSerializer(serializers.ModelSerializer):
     class Meta:
         model = Visit
         fields = [
-            'id',
-            'company',
-            'company_name',
-            'designation',
-            'acquisition_stage',
-            'client_budget',
-            'products_interested',
-            'contact_person',
-            'contact_person_name',
-            'contact_person_detail',
-            'item_discussed',
-            'meeting_type',
-            'latitude',
-            'longitude',
-            'place_name',
-            'region',
-            'zone',
-            'nation',
-            'visit_image',
-            'status',
-            'created_at',
-            'updated_at',
+            'id', 'company', 'company_name', 'designation', 'acquisition_stage',
+            'client_budget', 'products_interested', 'sales_items',
+            'contact_person', 'contact_person_name', 'contact_person_detail',
+            'item_discussed', 'meeting_type', 'latitude', 'longitude',
+            'place_name', 'region', 'zone', 'nation', 'visit_image',
+            'status', 'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id',
-            'created_at',
-            'updated_at',
-            'status',
-            'company_name',
-            'designation',
-            'contact_person_name',
-            'contact_person_detail',
-            'acquisition_stage',
-            'client_budget',
-            'products_interested',
-            'place_name',
-            'region',
-            'zone',
-            'nation',
+            'id', 'created_at', 'updated_at', 'status', 'company_name',
+            'designation', 'contact_person_name', 'contact_person_detail',
+            'acquisition_stage', 'client_budget', 'products_interested',
+            'sales_items', 'place_name', 'region', 'zone', 'nation',
         ]
 
+    def get_location_data(self, obj):
+        if not (obj.latitude and obj.longitude):
+            return {"place_name": "Not Available", "region": "", "zone": "", "nation": ""}
+
+        cache_key = f"visit_location_{obj.latitude}_{obj.longitude}"
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        try:
+            data = get_location_name(obj.latitude, obj.longitude)
+            cache.set(cache_key, data, timeout=60 * 60 * 24)
+            return data
+        except Exception:
+            return {"place_name": "Unavailable", "region": "", "zone": "", "nation": ""}
+
     def get_place_name(self, obj):
-        if obj.latitude and obj.longitude:
-            return get_location_name(obj.latitude, obj.longitude)["place_name"]
-        return "Not Available"
+        return self.get_location_data(obj)["place_name"]
 
     def get_region(self, obj):
-        if obj.latitude and obj.longitude:
-            return get_location_name(obj.latitude, obj.longitude)["region"]
-        return ""
+        return self.get_location_data(obj)["region"]
 
     def get_zone(self, obj):
-        if obj.latitude and obj.longitude:
-            return get_location_name(obj.latitude, obj.longitude)["zone"]
-        return ""
+        return self.get_location_data(obj)["zone"]
 
     def get_nation(self, obj):
-        if obj.latitude and obj.longitude:
-            return get_location_name(obj.latitude, obj.longitude)["nation"]
-        return ""
+        return self.get_location_data(obj)["nation"]
 
     def get_products_interested(self, obj):
-        if obj.company and hasattr(obj.company, 'sales'):
-            sales = getattr(obj.company, 'sales').first()
+        """
+        Return products related to the latest sales record for this visit's company.
+        Returns list of objects: {id, product_name}.
+        """
+        if obj.company:
+            sales = Sales.objects.filter(customer=obj.company).order_by('-id').first()  # latest sale
             if sales:
-                return [pi.product.name for pi in sales.product_interests.all()]
+                return [
+                    {
+                        "id": pi.id,
+                        "product_name": pi.product.name if pi.product else "Unnamed Product"
+                    }
+                    for pi in sales.product_interests.all()
+                ]
+        return []
+
+    def get_sales_items(self, obj):
+        """
+        Return the existing sales items for the latest sales record for this visit's company with prices.
+        """
+        sales = Sales.objects.filter(customer=obj.company).order_by('-id').first()  # latest sale
+        if sales:
+            return [
+                {
+                    "product": item.product.id if item.product else None,
+                    "price": item.price
+                }
+                for item in sales.items.all()
+            ]
         return []
 
     def validate(self, data):
@@ -114,14 +120,7 @@ class VisitSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-
-from rest_framework import serializers
-from .models import Visit
-from customers.models import Customer
-from sales.models import Sales
-from products.models import Product, ProductInterest
-
-# Map the progression of acquisition stages
+# --------------------- VisitUpdateSerializer ---------------------
 NEXT_STAGE_MAP = {
     "Prospecting": "Qualifying",
     "Qualifying": "Proposal or Negotiation",
@@ -131,12 +130,17 @@ NEXT_STAGE_MAP = {
 }
 
 class VisitUpdateSerializer(serializers.ModelSerializer):
-    # Accept product IDs from Product table
     product_interests = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(),
         many=True,
         write_only=True,
         required=False
+    )
+    available_products = serializers.SerializerMethodField(read_only=True)
+    contact_person = serializers.PrimaryKeyRelatedField(
+        queryset=CustomerContact.objects.all(),
+        required=False,
+        allow_null=True
     )
     client_budget = serializers.DecimalField(
         max_digits=15,
@@ -148,54 +152,50 @@ class VisitUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Visit
         fields = [
-            'item_discussed',
-            'meeting_type',
-            'visit_image',
-            'latitude',
-            'longitude',
-            'product_interests',
-            'client_budget',
+            'item_discussed', 'meeting_type', 'visit_image',
+            'latitude', 'longitude', 'contact_person',
+            'product_interests', 'available_products', 'client_budget',
         ]
 
+    def get_available_products(self, obj):
+        return [{"id": p.id, "name": p.name} for p in Product.objects.all()]
+
     def update(self, instance, validated_data):
-            customer = instance.company
-            if not customer:
-                raise serializers.ValidationError("Visit must be linked to a company to update sales.")
+        customer = instance.company
+        if not customer:
+            raise serializers.ValidationError("Visit must be linked to a company to update sales.")
 
-            current_stage = customer.acquisition_stage
-            next_stage = NEXT_STAGE_MAP.get(current_stage)
+        current_stage = customer.acquisition_stage
+        next_stage = NEXT_STAGE_MAP.get(current_stage)
 
-            # Always allow updating client_budget and products if stage is Qualifying
-            client_budget = validated_data.pop('client_budget', None)
-            products = validated_data.pop('product_interests', None)
+        client_budget = validated_data.pop('client_budget', None)
+        products = validated_data.pop('product_interests', None)
 
-            if current_stage == "Prospecting":
-                # Moving from Prospecting → Qualifying requires both
-                if client_budget is None:
-                    raise serializers.ValidationError({"client_budget": "Client budget is required to move to Qualifying."})
-                if not products:
-                    raise serializers.ValidationError({"product_interests": "At least one product must be selected to move to Qualifying."})
+        if current_stage == "Prospecting":
+            if client_budget is None:
+                raise serializers.ValidationError({"client_budget": "Client budget is required to move to Qualifying."})
+            if not products:
+                raise serializers.ValidationError({"product_interests": "At least one product must be selected to move to Qualifying."})
+            customer.acquisition_stage = "Qualifying"
 
-                # Update stage
-                customer.acquisition_stage = "Qualifying"
+        if client_budget is not None:
+            customer.client_budget = client_budget
+        customer.save()
 
-            # If already Qualifying, just update client_budget/products if provided
-            if client_budget is not None:
-                customer.client_budget = client_budget
-            customer.save()
+        if products:
+            sales = Sales.objects.filter(customer=customer).order_by('-id').first()
+            if not sales:
+                sales = Sales.objects.create(customer=customer)
 
-            if products:
-                sales, created = Sales.objects.get_or_create(customer=customer)
-                interest_objs = []
-                for product in products:
-                    pi, created = ProductInterest.objects.get_or_create(product=product)
-                    interest_objs.append(pi)
-                sales.product_interests.set(interest_objs)
-                sales.save()
+            interest_objs = []
+            for product in products:
+                pi, _ = ProductInterest.objects.get_or_create(product=product)
+                interest_objs.append(pi)
+            sales.product_interests.set(interest_objs)
+            sales.save()
 
-            # Update Visit fields normally
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-            instance.save()
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
 
-            return instance
+        return instance
