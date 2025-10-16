@@ -1,24 +1,26 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
-from django.db.models import Sum, Max, F, Value, DecimalField
+from django.db.models import Sum, Max, Value, DecimalField
 from django.db.models.functions import Coalesce
 from .models import Payment
 from sales.models import Sales
 from .serializers import PaymentSummarySerializer
 
 class PaymentListAll(generics.ListAPIView):
+    """
+    Returns aggregated payment data per customer for sales
+    added by the logged-in user.
+    """
     serializer_class = PaymentSummarySerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Returns aggregated payment data per customer.
-        Each customer appears only once with total collected,
-        remaining balance, and last payment date.
-        """
-        # Aggregate payments per customer
+        user = self.request.user  
+
+       
         queryset = (
             Payment.objects
+            .filter(sales__added_by=user) 
             .select_related("sales__customer")
             .values(
                 "sales__customer__id",
@@ -31,20 +33,24 @@ class PaymentListAll(generics.ListAPIView):
             .order_by("-last_payment_date")
         )
 
-        # Calculate remaining balance for each customer
+      
         result = []
         for item in queryset:
-            # Get all sales for this customer
-            sales_qs = Sales.objects.filter(customer_id=item["sales__customer__id"]).prefetch_related("items")
+          
+            sales_qs = Sales.objects.filter(
+                customer_id=item["sales__customer__id"],
+                added_by=user
+            ).prefetch_related("items")
 
-            total_price = 0
-            for sale in sales_qs:
-                total_price += sum(i.price or 0 for i in sale.items.all())
+            total_price = sum(
+                sum(i.price or 0 for i in sale.items.all()) for sale in sales_qs
+            )
 
             item["remaining_balance"] = max(total_price - item["total_collected"], 0)
             result.append(item)
 
         return result
+
     
 
 # views.py

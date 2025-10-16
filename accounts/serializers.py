@@ -6,9 +6,6 @@ from .models import User
 from rest_framework import serializers
 from .models import Branch
 
-# --------------------------
-# User Registration Serializer
-# --------------------------
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password1 = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)

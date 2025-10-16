@@ -20,16 +20,23 @@ class VisitCreateView(generics.CreateAPIView):
             self.perform_create(serializer)
             return Response(serializer.data)
         else:
-            print("Errors:", serializer.errors)   # 🔍 See why 400
+            print("Errors:", serializer.errors) 
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
 
+from rest_framework import generics, permissions
+from .models import Visit
+from .serializers import VisitSerializer
+
 class VisitListView(generics.ListAPIView):
-    queryset = Visit.objects.all().order_by('-created_at')  
     serializer_class = VisitSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Visit.objects.filter(added_by=user).order_by('-created_at')
 
 
 class VisitDetailView(generics.RetrieveAPIView):

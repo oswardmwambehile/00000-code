@@ -4,8 +4,8 @@ from .models import Sales
 from .serializers import SalesSerializer
 from visits.models import Visit
 from payment.models import Payment
-from products.models import ProductInterest  # 👈 ensure you import this if product prices come from here
-from django.db import transaction
+from django.db import transaction  
+from products.models import ProductInterest  
 from decimal import Decimal
 
 
@@ -30,15 +30,15 @@ class CreateSalesFromVisit(generics.CreateAPIView):
         items_data = self.request.data.get("items", [])
         is_order_final = self.request.data.get("is_order_final", False)
         status = self.request.data.get("status", None)
-        reason_lost = self.request.data.get("reason", None)
+        reason_lost = self.request.data.get("reason_lost", None)
 
-        # ✅ Validate that each item's price does not exceed product price
+
         for item in items_data:
             product_interest_id = item.get("product_interest")
             entered_price = Decimal(str(item.get("price", 0)))
 
             if not product_interest_id:
-                continue  # skip if not tied to a product_interest
+                continue  
 
             try:
                 product_interest = ProductInterest.objects.select_related("product").get(id=product_interest_id)
@@ -53,7 +53,7 @@ class CreateSalesFromVisit(generics.CreateAPIView):
                     "price": f"Entered price ({entered_price}) cannot be greater than product price ({product_price})."
                 })
 
-        # Check if sale exists
+       
         existing_sale = Sales.objects.filter(
             customer=visit.company,
             added_by=self.request.user
@@ -61,9 +61,11 @@ class CreateSalesFromVisit(generics.CreateAPIView):
 
         if existing_sale:
             update_data = {
-                "is_order_final": is_order_final,
                 "items": items_data
             }
+
+            if "is_order_final" in self.request.data:
+                update_data["is_order_final"] = is_order_final
             if status:
                 update_data["status"] = status
             if reason_lost:
@@ -128,8 +130,6 @@ class CreateSalesFromVisit(generics.CreateAPIView):
 
 
 
-
-
 from rest_framework import generics, permissions
 from .models import Sales
 from .serializers import SalesSerializer
@@ -137,28 +137,25 @@ from django.db.models import Sum, F
 
 class SalesListView(generics.ListAPIView):
     """
-    Returns all sales with related items, customers, and totals,
-    excluding those with total price = 0.
+    Returns all sales added by the logged-in user with related items, 
+    customers, and totals, excluding those with total price = 0.
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = SalesSerializer
 
     def get_queryset(self):
+        user = self.request.user  
         return (
             Sales.objects
             .select_related("customer", "added_by")
             .prefetch_related("items__product", "product_interests")
-            .annotate(
-                total_price_calc=Sum(F("items__price"))  # ensure we calculate price total dynamically
-            )
-            .filter(total_price_calc__gt=0)  # 🚫 exclude zero-total sales
+            .annotate(total_price_calc=Sum(F("items__price")))
+            .filter(total_price_calc__gt=0, added_by=user)  
             .order_by("-created_at")
         )
 
 
-# -----------------------------
-# Retrieve one sale by ID
-# -----------------------------
+
 class SalesDetailView(generics.RetrieveAPIView):
     """
     Returns detailed info about one sale, including product items and prices.
