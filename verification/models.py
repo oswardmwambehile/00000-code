@@ -11,21 +11,33 @@ VERIFICATION_STATUS_CHOICES = [
     ("Returned", "Returned"),
 ]
 
+
 class Verification(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey("content_type", "object_id")
 
-  
+    # User who submits the verification request
+    submitted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="verifications_submitted",
+        help_text="User who submitted this record for verification"
+    )
+
+    # User who is assigned to verify it
     verified_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="verifications_done"
+        related_name="verifications_done",
+        help_text="User who performed the verification"
     )
 
-   
+    # Supervisor assigned to verify this record (same as verified_by in your case)
     sent_to = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
