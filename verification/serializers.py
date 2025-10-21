@@ -82,3 +82,21 @@ class VerificationSerializer(serializers.ModelSerializer):
         if getattr(obj, 'verified_by', None):
             return f"{obj.verified_by.first_name} {obj.verified_by.last_name}".strip()
         return None
+    
+
+class SupervisorUpdateVerificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Verification
+        fields = ['status', 'message']
+        extra_kwargs = {
+            'status': {'required': True},
+            'message': {'required': False},
+        }
+
+    def update(self, instance, validated_data):
+        # Automatically set verified_by as the current user
+        request = self.context.get('request')
+        if request and request.user:
+            instance.verified_by = request.user
+        return super().update(instance, validated_data)
+

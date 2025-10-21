@@ -1,6 +1,7 @@
 from rest_framework import generics, permissions
 from .models import Verification
 from .serializers import VerificationSerializer
+from .serializers import SupervisorUpdateVerificationSerializer
 
 # ---------------- Submit Verification ----------------
 class SubmitVisitVerificationView(generics.CreateAPIView):
@@ -33,3 +34,33 @@ class SupervisorVisitVerificationsView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         return Verification.objects.filter(sent_to=user, content_type__model='visit')
+
+
+
+
+
+class SupervisorVisitVerificationDetailView(generics.RetrieveAPIView):
+    serializer_class = VerificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_url_kwarg = 'verification_id' 
+
+    def get_queryset(self):
+        # Only allow the supervisor to view their assigned verifications
+        user = self.request.user
+        return Verification.objects.filter(sent_to=user, content_type__model='visit')
+    
+
+class SupervisorUpdateVerificationView(generics.UpdateAPIView):
+    serializer_class = SupervisorUpdateVerificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_url_kwarg = 'verification_id'
+
+    def get_queryset(self):
+        user = self.request.user
+        return Verification.objects.filter(sent_to=user)
+
+
+
+
+
+
