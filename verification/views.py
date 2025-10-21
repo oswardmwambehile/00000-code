@@ -22,3 +22,14 @@ class UserSubmittedVerificationsView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         return Verification.objects.filter(submitted_by=user).order_by('-created_at')
+
+
+
+
+class SupervisorVisitVerificationsView(generics.ListAPIView):
+    serializer_class = VerificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Verification.objects.filter(sent_to=user, content_type__model='visit')
