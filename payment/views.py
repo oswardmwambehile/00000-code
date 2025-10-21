@@ -51,7 +51,44 @@ class PaymentListAll(generics.ListAPIView):
 
         return result
 
+
+class AdminPaymentListAll(generics.ListAPIView):
     
+    serializer_class = PaymentSummarySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+      
+        queryset = (
+            Payment.objects
+            .select_related("sales__customer")
+            .values(
+                "sales__customer__id",
+                "sales__customer__company_name",
+            )
+            .annotate(
+                total_collected=Coalesce(Sum("amount"), Value(0, output_field=DecimalField())),
+                last_payment_date=Max("created_at"),
+            )
+            .order_by("-last_payment_date")
+        )
+
+        result = []
+        for item in queryset:
+            sales_qs = Sales.objects.filter(
+                customer_id=item["sales__customer__id"]
+            ).prefetch_related("items")
+
+            total_price = sum(
+                sum(i.price or 0 for i in sale.items.all()) for sale in sales_qs
+            )
+
+            item["remaining_balance"] = max(total_price - item["total_collected"], 0)
+            result.append(item)
+
+        return result
+        
+
 
 # views.py
 from rest_framework import generics

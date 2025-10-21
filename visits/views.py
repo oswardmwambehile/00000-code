@@ -39,11 +39,28 @@ class VisitListView(generics.ListAPIView):
         return Visit.objects.filter(added_by=user).order_by('-created_at')
 
 
+
+class AdminVisitListView(generics.ListAPIView):
+    serializer_class = VisitSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Visit.objects.all().order_by('-created_at')
+
+
 class VisitDetailView(generics.RetrieveAPIView):
     queryset = Visit.objects.all()
     serializer_class = VisitSerializer
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = 'id' 
+
+
+class AdminVisitDetailView(generics.RetrieveAPIView):
+    queryset = Visit.objects.all()
+    serializer_class = VisitSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'id' 
+
 
 
 from rest_framework import generics, permissions, status

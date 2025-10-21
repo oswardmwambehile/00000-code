@@ -156,10 +156,38 @@ class SalesListView(generics.ListAPIView):
 
 
 
+class AdminSalesListView(generics.ListAPIView):
+    
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = SalesSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        return (
+            Sales.objects
+            .select_related("customer", "added_by")
+            .prefetch_related("items__product", "product_interests")
+            .annotate(total_price_calc=Sum(F("items__price")))
+            .filter(total_price_calc__gt=0) 
+            .exclude(added_by=user)           
+            .order_by("-created_at")
+        )
+
+
+
+
 class SalesDetailView(generics.RetrieveAPIView):
-    """
-    Returns detailed info about one sale, including product items and prices.
-    """
+   
+    queryset = (
+        Sales.objects.select_related("customer", "added_by")
+        .prefetch_related("items__product", "product_interests")
+    )
+    serializer_class = SalesSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = "id"
+
+
+class AdminSalesDetailView(generics.RetrieveAPIView):
     queryset = (
         Sales.objects.select_related("customer", "added_by")
         .prefetch_related("items__product", "product_interests")
