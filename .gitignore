@@ -1,0 +1,76 @@
+# ==========================
+# Python
+# ==========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.py~
+
+
+# ==========================
+# Virtual Environment
+# ==========================
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+
+# ==========================
+# Django
+# ==========================
+*.log
+*.pot
+*.pyc
+*.py~
+db.sqlite3
+db.sqlite3-journal
+
+# Local settings
+/local_settings.py
+/secrets.json
+
+
+# ==========================
+# Static & Media
+# ==========================
+/media/
+/staticfiles/
+/static/
+
+
+# ==========================
+# IDE / Editor Files
+# ==========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+
+
+# ==========================
+# OS Files
+# ==========================
+ehthumbs.db
+desktop.ini
+__MACOSX/
+
+
+# ==========================
+# Miscellaneous
+# ==========================
+*.coverage
+*.log
+*.mo
+*.pot
+*.pid
+*.seed
+*.out
+*.pid.lock
+*.json~

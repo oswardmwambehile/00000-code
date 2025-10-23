@@ -7,13 +7,18 @@ DESIGNATION_CHOICES = [
     ('Contractor', 'Contractor'),
 ]
 
-ACQUISITION_STAGE_CHOICES = [
-        ("Prospecting", "Prospecting"),
-        ("Qualifying", "Qualifying"),
-        ("Proposal or Negotiation", "Proposal or Negotiation"),
-        ("Closing", "Closing"),
-        ("Payment Followup", "Payment followup"),
+CUSTOMER_TYPES = [
+        ('Individual', 'Individual'),
+        ('Company', 'Company'),
     ]
+
+ACQUISITION_STAGE_CHOICES = [
+    ("Prospecting", "Prospecting"),
+    ("Qualifying", "Qualifying"),
+    ("Proposal or Negotiation", "Proposal or Negotiation"),
+    ("Closing", "Closing"),
+    ("Payment Followup", "Payment Followup"),
+]
 
 
 class Customer(models.Model):
@@ -25,6 +30,11 @@ class Customer(models.Model):
         max_length=200,
         unique=True
     )
+    customer_type = models.CharField(
+        max_length=20,
+        choices=CUSTOMER_TYPES,
+        default='Individual'
+    )
     location = models.CharField(max_length=200)
     email = models.EmailField(unique=True)
 
@@ -34,12 +44,13 @@ class Customer(models.Model):
         default='Prospecting'
     )
 
+   
     client_budget = models.DecimalField(
-        max_digits=12,
+        max_digits=15,
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Estimated client budget "
+        help_text="Estimated client budget in TZS"
     )
 
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
@@ -49,7 +60,11 @@ class Customer(models.Model):
 
 
 class CustomerContact(models.Model):
-    customer = models.ForeignKey(Customer, related_name="contacts", on_delete=models.CASCADE)
+    customer = models.ForeignKey(
+        Customer,
+        related_name="contacts",
+        on_delete=models.CASCADE
+    )
     contact_name = models.CharField(max_length=150)
     contact_detail = models.CharField(max_length=150)
 
