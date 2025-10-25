@@ -1,16 +1,10 @@
- # sales/urls.py
-
 from django.urls import path
-from . import views
+from .views import CreateSalesFromVisit,SalesListView, SalesDetailView, AdminSalesListView
 
 urlpatterns = [
-    path("new-sales/", views.new_sales, name="new_sales"),
-     path('sales_list/', views.sales_list, name='sales_list'),
-    path("sales-detail/<int:sale_id>/", views.sales_detail, name="sales_detail"),
-    path("get-contacts/<int:company_id>/", views.get_contacts, name="get_contacts"),
-    path("<int:pk>/update/", views.update_sale, name="update_sale"),
-    path("get-contact-details/<int:contact_id>/", views.get_contact_details, name="get_contact_details"),
-    # Add other sales-related URLs here if needed
+    path('create-from-visit/<int:visit_id>/', CreateSalesFromVisit.as_view(), name='sales-create-from-visit'),
+    path("sales-list/", SalesListView.as_view(), name="sales-list"),
+    path("admin-sales-list/", AdminSalesListView.as_view(), name="admin-sales-list"),
+    path("sales-details/<int:id>/", SalesDetailView.as_view(), name="sales-detail"),
+     path("admin-sales-details/<int:id>/", SalesDetailView.as_view(), name="admin-sales-detail"),
 ]
-
- 
