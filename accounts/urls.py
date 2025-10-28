@@ -9,7 +9,7 @@ from .views import (
     ChangePasswordView,
     UpdateProfileView
 )
-
+from . import views
 urlpatterns = [
     # User profile and info
     path("user/profile/", UserProfileView.as_view(), name="user-profile"),
@@ -24,4 +24,10 @@ urlpatterns = [
     # User settings
     path("user/change-password/", ChangePasswordView.as_view(), name="change-password"),
     path("user/update-profile/", UpdateProfileView.as_view(), name="update-profile"),
+
+    path('branches/', views.branch_list, name='branch-list'),
+    path('branches/create/', views.branch_create, name='branch-create'),
+    path('branches/<int:pk>/', views.branch_detail, name='branch-detail'),
+    path('branches/<int:pk>/update/', views.branch_update, name='branch-update'),
+    path('branches/<int:pk>/delete/', views.branch_delete, name='branch-delete'),
 ]
