@@ -7,6 +7,11 @@ DESIGNATION_CHOICES = [
     ('Contractor', 'Contractor'),
 ]
 
+CUSTOMER_TYPES = [
+        ('Individual', 'Individual'),
+        ('Company', 'Company'),
+    ]
+
 ACQUISITION_STAGE_CHOICES = [
     ("Prospecting", "Prospecting"),
     ("Qualifying", "Qualifying"),
@@ -24,6 +29,11 @@ class Customer(models.Model):
     company_name = models.CharField(
         max_length=200,
         unique=True
+    )
+    customer_type = models.CharField(
+        max_length=20,
+        choices=CUSTOMER_TYPES,
+        default='Individual'
     )
     location = models.CharField(max_length=200)
     email = models.EmailField(unique=True)

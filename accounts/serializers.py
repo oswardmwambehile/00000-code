@@ -3,10 +3,9 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from .models import User
+from rest_framework import serializers
+from .models import Branch
 
-# --------------------------
-# User Registration Serializer
-# --------------------------
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password1 = serializers.CharField(write_only=True)
     password2 = serializers.CharField(write_only=True)
@@ -139,3 +138,58 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True)
     new_password = serializers.CharField(required=True, validators=[validate_password])
+
+
+
+
+
+class BranchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Branch
+        fields = ['id', 'name', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def validate_name(self, value):
+       
+        branch_id = self.instance.id if self.instance else None
+
+        if Branch.objects.exclude(id=branch_id).filter(name__iexact=value).exists():
+            raise serializers.ValidationError("A branch with this name already exists.")
+        
+        return value
+
+
+from rest_framework import serializers
+from .models import User
+
+class UserListSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            'id', 'email', 'first_name', 'last_name',
+            'company_name', 'position', 'zone', 'branch_name',
+            'contact', 'is_active', 'date_joined'
+        ]
+
+
+
+class UserDetailSerializer(serializers.ModelSerializer):
+    branch_name = serializers.CharField(source='branch.name', read_only=True)
+
+    class Meta:
+        model = User
+        fields = '__all__'
+
+
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'first_name', 'last_name', 'company_name',
+            'position', 'zone', 'branch', 'contact', 'is_active'
+        ]
+
+
