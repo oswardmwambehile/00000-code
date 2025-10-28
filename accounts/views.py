@@ -4,6 +4,12 @@ from rest_framework.generics import GenericAPIView, RetrieveAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from .models import Branch
+from .serializers import BranchSerializer 
 
 from .serializers import (
     CustomUserSerializer,
@@ -126,3 +132,105 @@ class UserInfoAPIView(RetrieveAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def branch_list(request):
+    branches = Branch.objects.all().order_by('-created_at')
+    serializer = BranchSerializer(branches, many=True)
+    return Response(serializer.data)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def branch_create(request):
+    serializer = BranchSerializer(data=request.data)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def branch_detail(request, pk):
+    try:
+        branch = Branch.objects.get(pk=pk)
+    except Branch.DoesNotExist:
+        return Response({"error": "Branch not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = BranchSerializer(branch)
+    return Response(serializer.data)
+
+
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def branch_update(request, pk):
+    try:
+        branch = Branch.objects.get(pk=pk)
+    except Branch.DoesNotExist:
+        return Response({"error": "Branch not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = BranchSerializer(branch, data=request.data, partial=True)
+    if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def branch_delete(request, pk):
+    try:
+        branch = Branch.objects.get(pk=pk)
+    except Branch.DoesNotExist:
+        return Response({"error": "Branch not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    branch.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
+from .models import User
+from .serializers import (
+    UserListSerializer,
+    UserDetailSerializer,
+    UserUpdateSerializer,
+    
+)
+
+class UserListView(generics.ListAPIView):
+    queryset = User.objects.all().order_by('first_name')
+    serializer_class = UserListSerializer
+    permission_classes = [IsAuthenticated]
+
+
+class UserDetailView(generics.RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserDetailSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class UserUpdateView(generics.UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserUpdateSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+
+class UserDeleteView(generics.DestroyAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+

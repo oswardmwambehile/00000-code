@@ -1,7 +1,9 @@
+# urls.py
 from django.urls import path
-from . import views
+from .views import PaymentListAll, PaymentDetailByCustomer, AdminPaymentListAll
 
 urlpatterns = [
-    path('list-sales/', views.sales_list, name='sales_list'),
-    path('salepayment-detail/<int:sale_id>/', views.sales_detail, name='sales_detail'),  # optional, for detail view
+    path("payments-list/", PaymentListAll.as_view(), name="payments-list"),
+    path("admin-payments-list/", AdminPaymentListAll.as_view(), name="admin-payments-list"),
+    path("payments-list/customer/<int:customer_id>/", PaymentDetailByCustomer.as_view(), name="payments-detail-customer"),
 ]
