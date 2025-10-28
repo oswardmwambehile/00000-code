@@ -1,15 +1,14 @@
+# verification/serializers.py
 from rest_framework import serializers
-from .models import Verification, VerificationMessage
-from visits.models import Visit
-from visits.utils import get_location_name
+from .models import SalesVerification, SalesVerificationMessage
+from sales.models import Sales
+from sales.serializers import SalesSerializer  
 
-
-# ---------------- VerificationMessage Serializer ----------------
-class VerificationMessageSerializer(serializers.ModelSerializer):
+class SalesVerificationMessageSerializer(serializers.ModelSerializer):
     sender_name = serializers.SerializerMethodField()
 
     class Meta:
-        model = VerificationMessage
+        model = SalesVerificationMessage
         fields = ['id', 'sender', 'sender_name', 'message', 'created_at']
         read_only_fields = ['id', 'sender_name', 'created_at']
 
@@ -20,47 +19,27 @@ class VerificationMessageSerializer(serializers.ModelSerializer):
         return full_name if full_name else getattr(obj.sender, "email", "")
 
 
-
-class VerificationSerializer(serializers.ModelSerializer):
-   
-    messages = serializers.SerializerMethodField()  
-
-    visit_id = serializers.PrimaryKeyRelatedField(
-        queryset=Visit.objects.all(),
+class SalesVerificationSerializer(serializers.ModelSerializer):
+    sale = SalesSerializer(source='content_object', read_only=True)
+    customer_name = serializers.SerializerMethodField()  
+    sales_id = serializers.PrimaryKeyRelatedField(
+        queryset=Sales.objects.all(),
         source='content_object',
         write_only=True
     )
-
-   
-    customer_name = serializers.SerializerMethodField()
-    contact_person_name = serializers.SerializerMethodField()
-    meeting_type = serializers.SerializerMethodField()
-    item_discussed = serializers.SerializerMethodField()
-    visit_image_url = serializers.SerializerMethodField()
-
-    
-    latitude = serializers.SerializerMethodField()
-    longitude = serializers.SerializerMethodField()
-    place_name = serializers.SerializerMethodField()
-
-    # User-related fields
+    status = serializers.CharField(read_only=True)
     submitted_by_name = serializers.SerializerMethodField()
     sent_to_name = serializers.SerializerMethodField()
     verified_by_name = serializers.SerializerMethodField()
+    messages = serializers.SerializerMethodField()
 
     class Meta:
-        model = Verification
+        model = SalesVerification
         fields = [
             'id',
-            'visit_id',
-            'customer_name',
-            'contact_person_name',
-            'meeting_type',
-            'item_discussed',
-            'visit_image_url',
-            'latitude',
-            'longitude',
-            'place_name',
+            'sales_id',
+            'sale',
+            'customer_name',  
             'sent_to',
             'submitted_by_name',
             'sent_to_name',
@@ -71,7 +50,7 @@ class VerificationSerializer(serializers.ModelSerializer):
             'verified_by_name',
             'verified_at',
             'created_at',
-            'messages',  
+            'messages',
         ]
         read_only_fields = [
             'verified_by',
@@ -81,48 +60,15 @@ class VerificationSerializer(serializers.ModelSerializer):
             'status',
             'supervisor_message',
             'messages',
+            'customer_name',  # <-- readonly
         ]
 
-    
+    # ---------------- Helper Methods ----------------
     def get_customer_name(self, obj):
-        visit = obj.content_object
-        return visit.company.company_name if visit and visit.company else None
-
-    def get_contact_person_name(self, obj):
-        visit = obj.content_object
-        return visit.contact_person.contact_name if visit and visit.contact_person else None
-
-    def get_meeting_type(self, obj):
-        visit = obj.content_object
-        return visit.meeting_type if visit else None
-
-    def get_item_discussed(self, obj):
-        visit = obj.content_object
-        return visit.item_discussed if visit else None
-
-    def get_visit_image_url(self, obj):
-        visit = obj.content_object
-        if visit and visit.visit_image:
-            request = self.context.get('request')
-            return request.build_absolute_uri(visit.visit_image.url) if request else visit.visit_image.url
+        if getattr(obj.content_object, 'customer', None):
+            return obj.content_object.customer.company_name          
         return None
 
-    def get_latitude(self, obj):
-        visit = obj.content_object
-        return visit.latitude if visit else None
-
-    def get_longitude(self, obj):
-        visit = obj.content_object
-        return visit.longitude if visit else None
-
-    def get_place_name(self, obj):
-        visit = obj.content_object
-        if visit and visit.latitude and visit.longitude:
-            loc_data = get_location_name(visit.latitude, visit.longitude)
-            return loc_data.get("place_name", "Unknown")
-        return "Unknown"
-
-    
     def get_submitted_by_name(self, obj):
         if getattr(obj, 'submitted_by', None):
             return f"{obj.submitted_by.first_name} {obj.submitted_by.last_name}".strip()
@@ -141,7 +87,7 @@ class VerificationSerializer(serializers.ModelSerializer):
     def get_messages(self, obj):
         all_messages = []
 
-        # 1️⃣ User message (from Verification)
+        # User message
         if obj.user_message and obj.submitted_by:
             sender = obj.submitted_by
             sender_name = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or sender.email
@@ -153,8 +99,8 @@ class VerificationSerializer(serializers.ModelSerializer):
                 "created_at": obj.created_at,
             })
 
-        # 2️⃣ Chat messages
-        chat_messages = VerificationMessage.objects.filter(verification=obj).order_by("created_at")
+        # Chat messages
+        chat_messages = SalesVerificationMessage.objects.filter(verification=obj).order_by("created_at")
         for msg in chat_messages:
             sender = msg.sender
             sender_name = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or sender.email
@@ -166,7 +112,7 @@ class VerificationSerializer(serializers.ModelSerializer):
                 "created_at": msg.created_at,
             })
 
-        # 3️⃣ Supervisor message
+        # Supervisor message
         if obj.supervisor_message and obj.verified_by:
             sender = obj.verified_by
             sender_name = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or sender.email
@@ -178,16 +124,12 @@ class VerificationSerializer(serializers.ModelSerializer):
                 "created_at": obj.verified_at,
             })
 
-        # 4️⃣ Sort all messages chronologically
-        all_messages = sorted(all_messages, key=lambda m: m["created_at"])
-        return all_messages
+        return sorted(all_messages, key=lambda m: m["created_at"])
 
 
-
-# ---------------- Supervisor Update Serializer ----------------
-class SupervisorUpdateVerificationSerializer(serializers.ModelSerializer):
+class SupervisorUpdateSalesVerificationSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Verification
+        model = SalesVerification
         fields = ['status', 'supervisor_message']
         extra_kwargs = {
             'status': {'required': True},

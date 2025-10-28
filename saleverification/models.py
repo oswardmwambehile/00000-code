@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
+from sales.models import Sales
 
 User = get_user_model()
 
@@ -11,11 +12,10 @@ VERIFICATION_STATUS_CHOICES = [
     ("Returned", "Returned"),
 ]
 
-
-class Verification(models.Model):
+class SalesVerification(models.Model):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
-    content_object = GenericForeignKey("content_type", "object_id")
+    content_object = GenericForeignKey("content_type", "object_id")  # Points to Sales or other models
 
     # User who submits the verification request
     submitted_by = models.ForeignKey(
@@ -23,7 +23,7 @@ class Verification(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="verifications_submitted",
+        related_name="sales_verifications_submitted",
         help_text="User who submitted this record for verification"
     )
 
@@ -33,7 +33,7 @@ class Verification(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="verifications_done",
+        related_name="sales_verifications_done",
         help_text="User who performed the verification"
     )
 
@@ -41,7 +41,7 @@ class Verification(models.Model):
     sent_to = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name="verifications_assigned",
+        related_name="sales_verifications_assigned",
         help_text="Supervisor assigned to verify this record"
     )
 
@@ -65,18 +65,19 @@ class Verification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        verbose_name = "Verification"
-        verbose_name_plural = "Verifications"
+        verbose_name = "Sales Verification"
+        verbose_name_plural = "Sales Verifications"
         ordering = ["-created_at"]
 
     def __str__(self):
         return f"{self.content_type} #{self.object_id} - {self.status}"
+    
 
 
 
-class VerificationMessage(models.Model):
+class SalesVerificationMessage(models.Model):
     verification = models.ForeignKey(
-        Verification, related_name="messages", on_delete=models.CASCADE
+        SalesVerification, related_name="messages", on_delete=models.CASCADE
     )
     sender = models.ForeignKey(User, on_delete=models.CASCADE)
     message = models.TextField()
@@ -86,7 +87,6 @@ class VerificationMessage(models.Model):
         ordering = ["created_at"]
 
     def __str__(self):
-        
         first = self.sender.first_name or ""
         last = self.sender.last_name or ""
         full_name = f"{first} {last}".strip()
